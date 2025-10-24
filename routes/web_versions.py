@@ -98,10 +98,9 @@ def get_sort_options():
     return jsonify({
         'sort_options': [
             {'value': 'new', 'label': 'Новые издания'},
-            {'value': 'editions', 'label': 'По количеству изданий'},
-            {'value': 'relevance', 'label': 'По релевантности'}
-        ],
-        'service_available': get_open_library_service() is not None
+            {'value': 'editions', 'label': 'По количеству изданий'}
+            # Убрали 'relevance'
+        ]
     })
 
 @web_versions_bp.route('/api/web-versions/status', methods=['GET'])
