@@ -2,7 +2,7 @@ import sys
 import os
 
 # Добавляем путь к библиотеке flask-admin в sys.path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask-admin', 'flask-admin'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'libs', 'flask-admin'))
 
 from flask_admin.contrib.sqla import ModelView
 from flask_admin import Admin, AdminIndexView
