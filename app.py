@@ -10,6 +10,7 @@ from routes.users import users_bp
 from routes.reservations import reservations_bp
 from routes.web import web_bp
 from routes.web_versions import web_versions_bp
+from routes.api_gateway import api_gateway_bp
 from admin.models import MyAdminIndexView, BookModelView, UserModelView, AuthorModelView, GenreModelView, ReservationModelView
 from flask_admin import Admin
 from models import db, User, Book, Author, Genre, BookReservation
@@ -28,9 +29,10 @@ def create_app():
     # Initialize database
     init_db(app)
     
-    # Initialize Open Library service
+    # Initialize Open Library service with API Gateway
     init_open_library_service(app)
-
+    
+    # Initialize Captcha service
     init_captcha_service(app)
     
     # Инициализация Flask-Admin
@@ -50,6 +52,7 @@ def create_app():
     app.register_blueprint(reservations_bp)
     app.register_blueprint(web_bp)
     app.register_blueprint(web_versions_bp)
+    app.register_blueprint(api_gateway_bp)
     
     # Обработчик ошибок для 404
     @app.errorhandler(404)
@@ -93,13 +96,22 @@ def create_app():
         # Создаем тестовые данные, если их нет
         create_test_data()
         
-        # Логируем статус сервиса Open Library
+        # Логируем статус сервисов
         from services.open_library import get_open_library_service
+        from services.captcha import get_captcha_service
+        
         ol_service = get_open_library_service()
         if ol_service and ol_service.is_available():
-            app.logger.info('Сервис Open Library инициализирован и доступен')
+            health_status = "здоров" if ol_service.health_check() else "не здоров"
+            app.logger.info(f'Сервис Open Library инициализирован через API Gateway ({health_status})')
         else:
             app.logger.warning('Сервис Open Library недоступен')
+        
+        captcha_service = get_captcha_service()
+        if captcha_service and captcha_service.is_configured():
+            app.logger.info('Сервис Captcha инициализирован и доступен')
+        else:
+            app.logger.warning('Сервис Captcha недоступен')
     
     return app
 
