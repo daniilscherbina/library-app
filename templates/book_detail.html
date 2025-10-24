@@ -185,9 +185,11 @@ function loadWebVersions(bookId, sort = 'new') {
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-4">
-                                    ${book.cover_thumb_url ? 
-                                        `<img src="${book.cover_thumb_url}" class="img-fluid rounded shadow" style="height: 220px; object-fit: cover; width: 100%;" alt="Обложка книги ${book.title}">` : 
-                                        '<div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 220px;"><i class="bi bi-book text-muted" style="font-size: 4rem;"></i></div>'
+                                    ${book.cover_url ? 
+                                        `<div class="book-cover-container">
+                                            <img src="${book.cover_url}" class="book-cover-img" alt="Обложка книги ${book.title}">
+                                        </div>` : 
+                                        '<div class="bg-light d-flex align-items-center justify-content-center rounded book-cover-placeholder"><i class="bi bi-book text-muted"></i></div>'
                                     }
                                 </div>
                                 <div class="col-md-8">
@@ -345,4 +347,38 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<style>
+/* Стили для контейнера обложки книги */
+.book-cover-container {
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+}
+
+/* Стили для изображения обложки */
+.book-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Стили для плейсхолдера обложки */
+.book-cover-placeholder {
+    width: 100%;
+    height: 220px;
+    border-radius: 4px;
+}
+
+.book-cover-placeholder i {
+    font-size: 3rem;
+}
+</style>
 {% endblock %}
