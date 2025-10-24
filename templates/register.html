@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация - Библиотека{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Регистрация</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="register-form">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required 
+                               value="{{ request.form.email if request.form.email }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="first_name" class="form-label">Имя</label>
+                        <input type="text" class="form-control" id="first_name" name="first_name" required
+                               value="{{ request.form.first_name if request.form.first_name }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="last_name" class="form-label">Фамилия</label>
+                        <input type="text" class="form-control" id="last_name" name="last_name" required
+                               value="{{ request.form.last_name if request.form.last_name }}">
+                    </div>
+                    
+                    <!-- Yandex SmartCaptcha -->
+                    {% if captcha_enabled %}
+                    <div class="mb-3">
+                        <label class="form-label">Подтвердите, что вы не робот</label>
+                        <div id="captcha-container" class="smart-captcha captcha-container" 
+                             data-sitekey="{{ captcha_client_key }}" style="height: 100px;">
+                        </div>
+                        <div class="form-text">
+                            Нажмите на кнопку "Я не робот" для продолжения
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <button type="submit" class="btn btn-primary w-100" 
+                            {% if captcha_enabled %}disabled{% endif %} id="submit-btn">
+                        Зарегистрироваться
+                    </button>
+                </form>
+                <div class="text-center mt-3">
+                    <p>Уже есть аккаунт? <a href="{{ url_for('web.login') }}">Войдите</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if captcha_enabled %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const submitBtn = document.getElementById('submit-btn');
+    const form = document.getElementById('register-form');
+    
+    // Функция для проверки состояния капчи
+    function checkCaptcha() {
+        const captchaInput = document.querySelector('input[name="smart-token"]');
+        if (captchaInput && captchaInput.value) {
+            submitBtn.disabled = false;
+        } else {
+            submitBtn.disabled = true;
+        }
+    }
+    
+    // Проверяем капчу каждые 500ms
+    setInterval(checkCaptcha, 500);
+    
+    // Также проверяем при изменении формы
+    form.addEventListener('change', checkCaptcha);
+    form.addEventListener('input', checkCaptcha);
+});
+</script>
+{% endif %}
+{% endblock %}

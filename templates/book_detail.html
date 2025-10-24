@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}{{ book.title }} - Библиотека{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>{{ book.title }}</h1>
+        <p class="lead">
+            {% for author in book.authors %}
+                {{ author.first_name }} {{ author.last_name }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+        
+        <div class="mb-4">
+            <div class="d-flex align-items-center mb-2">
+                <span class="badge bg-{{ 'success' if book.available_copies > 0 else 'warning' }} fs-6 me-2">
+                    {{ 'Доступно' if book.available_copies > 0 else 'Нет в наличии' }}
+                </span>
+                <span class="text-muted">Доступно копий: {{ book.available_copies }} из {{ book.total_copies }}</span>
+            </div>
+            
+            {% if book.publication_year %}
+                <span class="badge bg-info fs-6">{{ book.publication_year }} год</span>
+            {% endif %}
+        </div>
+        
+        {% if book.description %}
+        <div class="mb-4">
+            <h5>Описание</h5>
+            <p>{{ book.description }}</p>
+        </div>
+        {% endif %}
+        
+        {% if book.genres %}
+        <div class="mb-4">
+            <h5>Жанры</h5>
+            {% for genre in book.genres %}
+                <span class="badge bg-secondary">{{ genre.name }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        {% if book.isbn %}
+        <div class="mb-4">
+            <h5>ISBN</h5>
+            <p>{{ book.isbn }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- Секция веб-версий -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5>Электронные версии</h5>
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary active" data-sort="new">Новые</button>
+                    <button type="button" class="btn btn-outline-secondary" data-sort="editions">Популярные</button>
+                    <button type="button" class="btn btn-outline-secondary" data-sort="relevance">Релевантные</button>
+                </div>
+            </div>
+            <div id="web-versions-section">
+                <div class="alert alert-info">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    Поиск электронных версий...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Действия</h5>
+                
+                {% if user %}
+                    {% if book.available_copies > 0 %}
+                        <form action="{{ url_for('web.reserve_book', book_id=book.id) }}" method="post">
+                            <button type="submit" class="btn btn-primary w-100 mb-2">
+                                <i class="bi bi-bookmark-plus"></i> Забронировать
+                            </button>
+                        </form>
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle"></i>
+                            После бронирования количество доступных копий уменьшится на 1
+                        </div>
+                    {% else %}
+                        <button class="btn btn-secondary w-100 mb-2" disabled>
+                            <i class="bi bi-bookmark-x"></i> Нет доступных копий
+                        </button>
+                        <div class="alert alert-warning small">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Все копии этой книги сейчас забронированы
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted">Для бронирования книги необходимо войти в систему.</p>
+                    <a href="{{ url_for('web.login') }}" class="btn btn-primary w-100">Войти</a>
+                {% endif %}
+                <a href="{{ url_for('web.books') }}" class="btn btn-outline-secondary w-100">Назад к списку</a>
+            </div>
+        </div>
+        
+        <!-- Блок быстрого поиска в Open Library -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title">Поиск в Open Library</h6>
+                <div class="input-group input-group-sm">
+                    <input type="text" id="quick-search" class="form-control" placeholder="Название книги..." value="{{ book.title }}">
+                    <button class="btn btn-outline-primary" type="button" onclick="quickSearch()">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+                <div id="quick-search-results" class="mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Текущий способ сортировки
+let currentSort = 'new';
+
+// Функция для загрузки веб-версий
+function loadWebVersions(bookId, sort = 'new') {
+    const webVersionsSection = document.getElementById('web-versions-section');
+    webVersionsSection.innerHTML = `
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            Поиск электронных версий...
+        </div>
+    `;
+    
+    fetch(`/api/books/${bookId}/web-versions?sort=${sort}`)
+        .then(response => response.json())
+        .then(data => {
+            // Проверяем доступность сервиса
+            if (data.service_available === false) {
+                webVersionsSection.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Сервис поиска электронных версий временно недоступен.
+                        <div class="mt-2 small text-muted">
+                            Приносим извинения за неудобства. Попробуйте позже или 
+                            <a href="https://openlibrary.org/search?title=${encodeURIComponent('{{ book.title }}')}" 
+                               target="_blank" class="alert-link">
+                                выполните поиск напрямую на Open Library
+                            </a>.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (data.success && data.results && data.results.length > 0) {
+                let html = '';
+                
+                data.results.forEach((book, index) => {
+                    const authors = book.authors && book.authors.length > 0 ? 
+                        book.authors.join(', ') : 'Автор не указан';
+                    
+                    const publishYear = book.publish_year ? 
+                        `Год издания: ${book.publish_year}` : '';
+                    
+                    const editionInfo = book.edition_count > 1 ? 
+                        `${book.edition_count} изданий` : '';
+                    
+                    const ebookInfo = book.ebook_count > 0 ? 
+                        `<span class="badge bg-success">${book.ebook_count} электронных версий</span>` : '';
+                    
+                    // Формируем ссылки для заимствования
+                    let borrowLinksHtml = '';
+                    if (book.borrow_links && book.borrow_links.length > 0) {
+                        borrowLinksHtml = '<div class="mt-2"><strong>Доступно для чтения:</strong><div class="mt-1">';
+                        book.borrow_links.forEach(link => {
+                            borrowLinksHtml += `
+                                <a href="${link.borrow_url}" target="_blank" class="btn btn-sm btn-success me-1 mb-1">
+                                    <i class="bi bi-book"></i> Читать
+                                </a>
+                            `;
+                        });
+                        borrowLinksHtml += '</div></div>';
+                    }
+                    
+                    html += `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    ${book.cover_thumb_url ? 
+                                        `<img src="${book.cover_thumb_url}" class="img-fluid rounded" alt="Обложка">` : 
+                                        '<div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 150px;"><i class="bi bi-book text-muted" style="font-size: 3rem;"></i></div>'
+                                    }
+                                </div>
+                                <div class="col-md-9">
+                                    <h6 class="card-title">${book.title}</h6>
+                                    <p class="card-text text-muted">${authors}</p>
+                                    <div class="mb-2">
+                                        ${publishYear ? `<span class="badge bg-light text-dark me-1">${publishYear}</span>` : ''}
+                                        ${editionInfo ? `<span class="badge bg-light text-dark me-1">${editionInfo}</span>` : ''}
+                                        ${ebookInfo ? `<span class="badge bg-success me-1">${ebookInfo}</span>` : ''}
+                                    </div>
+                                    ${borrowLinksHtml}
+                                    ${book.openlibrary_url ? 
+                                        `<a href="${book.openlibrary_url}" target="_blank" class="btn btn-sm btn-outline-primary mt-2">
+                                            <i class="bi bi-globe"></i> Страница в Open Library
+                                        </a>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                if (data.total_results > data.results_with_ia) {
+                    html += `
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            Найдено ${data.total_results} изданий, из них ${data.results_with_ia} с электронными версиями.
+                            <a href="https://openlibrary.org/search?title=${encodeURIComponent(data.search_query)}" 
+                               target="_blank" class="alert-link">
+                                Посмотреть все издания в Open Library
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                webVersionsSection.innerHTML = html;
+            } else {
+                webVersionsSection.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Электронные версии не найдены. 
+                        <a href="https://openlibrary.org/search?title=${encodeURIComponent('{{ book.title }}')}" 
+                           target="_blank" class="alert-link">
+                            Попробуйте поискать вручную на Open Library
+                        </a>.
+                        <div class="mt-2 small text-muted">
+                            Примечание: поиск выполняется только по книгам, доступным для заимствования через Internet Archive.
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading web versions:', error);
+            webVersionsSection.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle"></i>
+                    Ошибка при загрузке электронных версий. Попробуйте обновить страницу.
+                </div>
+            `;
+        });
+}
+
+// Функция для быстрого поиска
+function quickSearch() {
+    const searchInput = document.getElementById('quick-search');
+    const resultsDiv = document.getElementById('quick-search-results');
+    const query = searchInput.value.trim();
+    
+    if (!query) return;
+    
+    resultsDiv.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Поиск...</div>';
+    
+    fetch(`/api/web-versions/search?title=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.results && data.results.length > 0) {
+                let html = '<div class="list-group list-group-flush">';
+                data.results.slice(0, 3).forEach(book => {
+                    const authors = book.authors && book.authors.length > 0 ? 
+                        book.authors.join(', ') : 'Автор не указан';
+                    
+                    // Формируем ссылки для заимствования
+                    let borrowLinks = '';
+                    if (book.borrow_links && book.borrow_links.length > 0) {
+                        borrowLinks = `<div class="mt-1">`;
+                        book.borrow_links.slice(0, 2).forEach(link => {
+                            borrowLinks += `<a href="${link.borrow_url}" target="_blank" class="btn btn-sm btn-success btn-sm me-1 mb-1">Читать</a>`;
+                        });
+                        borrowLinks += `</div>`;
+                    }
+                    
+                    html += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">${book.title}</h6>
+                            ${book.ebook_count > 0 ? 
+                                '<small class="text-success">Есть электронная версия</small>' : ''}
+                        </div>
+                        <p class="mb-1 small">${authors}</p>
+                        ${book.publish_year ? `<small>Год: ${book.publish_year}</small>` : ''}
+                        ${borrowLinks}
+                        ${book.openlibrary_url ? 
+                            `<a href="${book.openlibrary_url}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">Open Library</a>` : ''}
+                    </div>
+                    `;
+                });
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-warning py-2">
+                        <small>Электронные версии не найдены</small>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Quick search error:', error);
+            resultsDiv.innerHTML = `
+                <div class="alert alert-danger py-2">
+                    <small>Ошибка поиска</small>
+                </div>
+            `;
+        });
+}
+
+// Обработчики для кнопок сортировки
+document.addEventListener('DOMContentLoaded', function() {
+    // Загружаем веб-версии при открытии страницы
+    loadWebVersions({{ book.id }}, currentSort);
+    
+    // Назначаем обработчики для кнопок сортировки
+    document.querySelectorAll('[data-sort]').forEach(button => {
+        button.addEventListener('click', function() {
+            const sort = this.getAttribute('data-sort');
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('[data-sort]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            this.classList.add('active');
+            
+            // Загружаем данные с новой сортировкой
+            currentSort = sort;
+            loadWebVersions({{ book.id }}, sort);
+        });
+    });
+    
+    // Обработчик Enter в поле быстрого поиска
+    document.getElementById('quick-search').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            quickSearch();
+        }
+    });
+});
+</script>
+{% endblock %}
